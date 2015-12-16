@@ -27,16 +27,6 @@ class login(object):
             'appid': 549000912,
             'style': 22,
             'target': 'self',
-            's_url': 'http://qzs.qq.com/qzone/v5/loginsucc.html?para=izone',
-            'daid': 5,
-            'hide_title_bar': 1,
-            'low_login': 0,
-            'qlogin_auto_login': 1,
-            'no_verifyimg': 1,
-            'link_target': 'blank',
-            'appid': 549000912,
-            'style': 22,
-            'target': 'self',
             's_url': 'http://qzs.qq.com/qzone/v5/loginsucc.html?para=izone'
         }
         init_request = self.requesr_session.get(
@@ -101,8 +91,8 @@ class login(object):
     def getg_tk(self):
         skey = self.requesr_session.cookies['skey']
         hash = 5381
-        for x in xrange(len(skey)):
-            hash += (hash << 5) + ord(skey[x])
+        for x in skey:
+            hash += (hash << 5) + ord(x)
         self.g_tk = int(hash & 2147483647)
         return self.g_tk  # 0x7FFFFFFF
 
