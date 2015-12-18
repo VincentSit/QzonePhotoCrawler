@@ -109,4 +109,4 @@ class login(object):
             self.getg_tk()
             print u'登录成功。'
         else:  # 等待二次验证 不会跳转
-            print u'不支持二次验证'
+            exit(u'不支持二次验证')

@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import re
-import time
 import json
 import os
 import sys
@@ -32,7 +31,7 @@ class QQphoto(api.login):
             'inCharset': 'utf-8',
             'outCharset': 'utf-8'
         }
-        print u'获取相册列表\r',
+        print u'获取相册列表'
         album_request = self.requesr_session.get(
             'http://tjalist.photo.qzone.qq.com/fcgi-bin/fcg_list_album_v3', params=payload)
         album_request.raise_for_status()
@@ -79,7 +78,7 @@ class QQphoto(api.login):
             photoName = photo['name']
             photoDesc = photo['desc']
             photoType = photo['phototype']
-            # JPG 1 PNG 3 GIF 2
+            # JPG 1 5 PNG 3 GIF 2
             photoURL = photo['raw'] or photo['origin_url'] or photo['url']
             photolist.append({
                 'photoName': photoName,
@@ -90,71 +89,74 @@ class QQphoto(api.login):
         return photolist
 
     def iterphoto(self, albumid, total, pageNum=30):
-        if total:  # 如果相册总数不为零
+        if total:  # 如果照片总数不为零
             for pageStart in xrange(0, total, pageNum):
                 yield self.getphotolist(albumid, pageStart, pageNum)
 
+    def download_img(self, url, savepath):
+        try:
+            download_request = requests.get(url, stream=True, headers={
+                'User-Agent': 'Mozilla/5.0 (compatible; MSIE 10.0; Windows Phone 8.0; Trident/6.0; IEMobile/10.0; ARM; Touch; NOKIA; Lumia 520)'}
+            )
+            if download_request.status_code == 200:
+                with open(savepath, 'wb') as data:
+                    for chunk in download_request.iter_content(chunk_size=1024):
+                        data.write(chunk)
+        except (KeyboardInterrupt, SystemExit), e:
+            if os.path.isfile(savepath):
+                os.remove(savepath)
+            raise e
 
-def download_img(url, savepath):
-    try:
-        download_request = requests.get(url, stream=True)
-        if download_request.status_code == 200:
-            with open(savepath, 'wb') as data:
-                for chunk in download_request.iter_content(chunk_size=1024):
-                    data.write(chunk)
-    except (KeyboardInterrupt, SystemExit), e:
-        if os.path.isfile(savepath):
-            os.remove(savepath)
-        raise e
+    def _check_path(self, path):
+        if not os.path.isdir(path):
+            os.makedirs(path)
 
+    def _check_name(self, name):
+        name_re = re.compile(r'[\\/:\*\?"<>\|]')
+        name = re.sub(name_re, '_', name)
+        return name
 
-def check_path(path):
-    if not os.path.isdir(path):
-        os.makedirs(path)
-
-
-def check_filename(path, name, filetype, oldname=None, i=1):
-    name_re = re.compile(r'[\\/:\*\?"<>\|]')
-    name = re.sub(name_re, '_', name)
-    if not oldname:
-        oldname = name
-    filepath = os.path.join(path, name + filetype)
-    if os.path.isfile(filepath):
-        name = oldname + '_' + unicode(i)
-        i = i + 1
-        return check_filename(path, name, filetype, oldname, i)
-    else:
-        return filepath
-
-
-def download(albumlist):
-    for album in albumlist:
-        photoList = []
-        albumpath = os.path.join(SAVEPATH, album['albumName'])
-        i = 0
-        for photolist in login.iterphoto(album['albumID'], album['albumNum']):
-            check_path(albumpath)
-            photoList.extend(photolist)
-
-        for photodict in photoList:
-            # print photodict
-            if photodict['photoType'] == 1 or photodict['photoType'] == 5:
-                imgtype = u'.jpg'
-            elif photodict['photoType'] == 2:
-                imgtype = u'.gif'
-            elif photodict['photoType'] == 3:
-                imgtype = u'.png'
-            else:
-                imgtype = u'.pic'
-            photopath = check_filename(
-                albumpath, photodict['photoName'], imgtype)
-            print "%s / %s" % (i, album['albumNum'])
+    def _check_filename(self, path, name, filetype, oldname=None, i=1):
+        name = self._check_name(name)
+        if not oldname:
+            oldname = name
+        filepath = os.path.join(path, name + filetype)
+        if os.path.isfile(filepath):
+            name = oldname + '_' + unicode(i)
             i = i + 1
-            download_img(photodict['photoURL'], photopath)
+            return self._check_filename(path, name, filetype, oldname, i)
+        else:
+            return filepath
+
+    def download(self, albumlist):
+        for album in albumlist:
+            photoList = []
+            albumname = self._check_name(album['albumName'])
+            albumpath = os.path.join(SAVEPATH, albumname)
+            i = 1
+            for photolist in self.iterphoto(album['albumID'], album['albumNum']):
+                self._check_path(albumpath)
+                photoList.extend(photolist)
+
+            for photodict in photoList:
+                # print photodict
+                if photodict['photoType'] == 1 or photodict['photoType'] == 5:
+                    imgtype = u'.jpg'
+                elif photodict['photoType'] == 2:
+                    imgtype = u'.gif'
+                elif photodict['photoType'] == 3:
+                    imgtype = u'.png'
+                else:
+                    imgtype = u'.pic'
+                photopath = self._check_filename(
+                    albumpath, photodict['photoName'], imgtype)
+                print "%s / %s" % (i, album['albumNum'])
+                i = i + 1
+                self.download_img(photodict['photoURL'], photopath)
 
 
 if __name__ == '__main__':
     login = QQphoto()
     login.run()
     login.getalbum()
-    download(login.albumlist)
+    login.download(login.albumlist)
